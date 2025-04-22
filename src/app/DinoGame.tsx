@@ -20,7 +20,7 @@ export default function DinoGame() {
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
   const gravity = 0.6;
-  const jumpStrength = -100;
+  const jumpStrength = -70;
 
   const dinoRef = useRef<HTMLImageElement>(null);
   const jumpSound = useRef<HTMLAudioElement | null>(null);
