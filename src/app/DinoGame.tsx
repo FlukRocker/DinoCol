@@ -382,7 +382,8 @@ export default function DinoGame() {
         )}
       </div>
         <div className="absolute bottom-10 text-black font-bold text-center">
-          Design and idea by riii_to & Optimize and Hosting with ❤️ by FlukRocker
+          Design and idea by <a href="https://www.twitch.tv/riii_to" target="_blank" className="text-purple-600 hover:text-purple-800">riii_to</a> & Optimize and Hosting with ❤️ by <a href="https://www.twitch.tv/flukrocker" target="_blank" className="text-purple-600 hover:text-purple-800">FlukRocker</a>
+          <p>Testing by <a href="https://www.twitch.tv/l3lackmegas" target="_blank" className="text-purple-600 hover:text-purple-800">l3lackmegas</a>, <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">Xerenon</a> and <a href="https://www.twitch.tv/crosslos_" target="_blank" className="text-purple-600 hover:text-purple-800">Crosslos_</a></p>
         </div>
     </div>
   );
