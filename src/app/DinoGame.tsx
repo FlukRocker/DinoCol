@@ -19,6 +19,9 @@ export default function DinoGame() {
   const [speed, setSpeed] = useState(1);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
+  const highestScore = useRef(0);
+  const [lastScore, setLastScore] = useState(0);
+
   const gravity = 0.6;
   const jumpStrength = -70;
 
@@ -44,6 +47,10 @@ export default function DinoGame() {
 
   const restart = () => {
     setGameOver(false);
+    setLastScore(score);
+    if (score > highestScore.current) {
+      highestScore.current = score;
+    }
     setScore(0);
     setLives(1);
     setSpeed(1);
@@ -358,11 +365,17 @@ export default function DinoGame() {
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-20">
             <div className="text-center">
               <h1 className="text-xl font-bold text-red-600 mb-4">Game Over</h1>
+              <p className="text-lg font-bold text-gray-800 mb-2">
+                Last Score: {score}
+              </p>
+              <p className="text-lg font-bold text-gray-800 mb-4">
+                Highest Score: {highestScore.current}
+              </p>
               <button
                 onClick={restart}
                 className="bg-blue-500 text-white px-4 py-2 rounded"
               >
-                เล่นใหม่
+                Restart
               </button>
             </div>
           </div>

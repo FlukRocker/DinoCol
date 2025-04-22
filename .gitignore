@@ -15,6 +15,7 @@ build/
 *.pid
 *.seed
 *.pid.lock
+.next/
 
 # Environment variables
 .env
