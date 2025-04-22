@@ -16,7 +16,7 @@ export default function DinoGame() {
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(1);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(0.5);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
   const highestScore = useRef(0);
@@ -53,7 +53,7 @@ export default function DinoGame() {
     }
     setScore(0);
     setLives(1);
-    setSpeed(1);
+    setSpeed(0.5);
     setObstacles([]);
     setVelocity(0);
     setPositionY(0);
