@@ -86,12 +86,11 @@ export default function DinoGame() {
 
   const handleTwitchLogin = () => {
     // Twitch OAuth parameters
-    const clientId = 'pp6g2qe5mufm52ufslyuff8zzv2d2v';  // ลบช่องว่างที่ไม่จำเป็นออก
     const redirectUri = window.location.origin;
     const scope = 'user:read:email';
     
     // Create OAuth URL
-    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
     
     // Redirect to Twitch login
     window.location.href = authUrl;
@@ -113,7 +112,7 @@ export default function DinoGame() {
         fetch('https://api.twitch.tv/helix/users', {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Client-Id': 'pp6g2qe5mufm52ufslyuff8zzv2d2v'
+            'Client-Id': process.env.TWITCH_CLIENT || ''
           }
         })
         .then(res => res.json())
