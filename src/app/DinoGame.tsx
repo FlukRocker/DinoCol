@@ -1,10 +1,17 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import Leaderboard from '@/components/Leaderboard';
 
 interface Obstacle {
   id: number;
   type: "cactus" | "bird" | "snack";
   left: number;
+}
+
+interface User {
+  name: string;
+  profileImage: string;
+  twitchId: string;
 }
 
 export default function DinoGame() {
@@ -19,13 +26,19 @@ export default function DinoGame() {
   const [lives, setLives] = useState(1);
   const [speed, setSpeed] = useState(1);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
+  const [volume, setVolume] = useState(0.5);
+  const [user, setUser] = useState<User | null>(null);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
-   const collidedRef = useRef<Set<number>>(new Set());
+  const collidedRef = useRef<Set<number>>(new Set());
 
   const DINO_LEFT = 48;
   const GAME_WIDTH = 800;
+  const GRAVITY = 0.25;
+  const INITIAL_JUMP_VELOCITY = -11.5;
+  const MAX_JUMP_HEIGHT = 86;
 
   const jumpSound = useRef<HTMLAudioElement | null>(null);
   const assetCache = useRef<{ [key: string]: HTMLImageElement }>({});
@@ -34,7 +47,7 @@ export default function DinoGame() {
     if (!isJumping && !ducking && !gameOver) {
       jumpSound.current?.play();
       setIsJumping(true);
-      setJumpTicks(11); // กระโดดไม่สูงเกินไป
+      setVelocity(INITIAL_JUMP_VELOCITY);
     }
   };
 
@@ -62,6 +75,60 @@ export default function DinoGame() {
     setFrameIndex(0);
     collidedRef.current.clear();
   };
+
+  const handleVolumeChange = (newVolume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, newVolume));
+    setVolume(clampedVolume);
+    if (jumpSound.current) {
+      jumpSound.current.volume = clampedVolume;
+    }
+  };
+
+  const handleTwitchLogin = () => {
+    // Twitch OAuth parameters
+    const clientId = 'pp6g2qe5mufm52ufslyuff8zzv2d2v';  // ลบช่องว่างที่ไม่จำเป็นออก
+    const redirectUri = window.location.origin;
+    const scope = 'user:read:email';
+    
+    // Create OAuth URL
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
+    
+    // Redirect to Twitch login
+    window.location.href = authUrl;
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    // ลบ hash ออกจาก URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  };
+
+  // Check for OAuth callback
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const accessToken = hash.split('&')[0].split('=')[1];
+      if (accessToken) {
+        // Get user info from Twitch
+        fetch('https://api.twitch.tv/helix/users', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Client-Id': 'pp6g2qe5mufm52ufslyuff8zzv2d2v'
+          }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.data && data.data[0]) {
+            setUser({
+              name: data.data[0].display_name,
+              profileImage: data.data[0].profile_image_url,
+              twitchId: data.data[0].id
+            });
+          }
+        });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -117,19 +184,29 @@ export default function DinoGame() {
   }, []);
 
   useEffect(() => {
+    const playSound = (sound: string) => {
+      const audio = new Audio(sound);
+      audio.volume = volume;
+      audio.play();
+    };
+
     if (score > 0 && score % 100 === 0) {
-      new Audio("/milestone.mp3").play();
+      playSound("/milestone.mp3");
     }
-  }, [score]);
+  }, [score, volume]);
 
   useEffect(() => {
-    if (gameOver) new Audio("/gameover.mp3").play();
-  }, [gameOver]);
+    if (gameOver) {
+      const audio = new Audio("/gameover.mp3");
+      audio.volume = volume;
+      audio.play();
+    }
+  }, [gameOver, volume]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setFrameIndex(i => (i + 1) % 3);
-    }, 120);
+    }, 220);
     return () => clearInterval(interval);
   }, []);
 
@@ -168,24 +245,27 @@ export default function DinoGame() {
 
       setVelocity(v => {
         let newVelocity = v;
-        if (jumpTicks > 0) {
-          newVelocity = -6.5;
-          setJumpTicks(t => t - 1);
-        } else {
-          newVelocity = v + (v < 0 ? 0.2 : 0.8);
+        if (isJumping) {
+          newVelocity += GRAVITY;
         }
+        return newVelocity;
+      });
 
-        let newY = 0;
-        setPositionY(y => {
-          newY = y + newVelocity;
-          if (newY > 0) {
-            setIsJumping(false);
-            return 0;
-          }
-          return newY;
-        });
-
-        return newY === 0 ? 0 : newVelocity;
+      setPositionY(y => {
+        const newY = y + velocity;
+        
+        if (newY >= 0) {
+          setIsJumping(false);
+          setVelocity(0);
+          return 0;
+        }
+        
+        if (newY <= -MAX_JUMP_HEIGHT) {
+          setVelocity(GRAVITY);
+          return -MAX_JUMP_HEIGHT;
+        }
+        
+        return newY;
       });
 
       setObstacles(prev => {
@@ -194,7 +274,7 @@ export default function DinoGame() {
 
         const dinoBox = {
           x: DINO_LEFT,
-          y: -positionY, // ✅ แก้ตรงนี้ให้ hitbox ตรงภาพ
+          y: -positionY,
           width: ducking ? 64 : 48,
           height: ducking ? 40 : 48,
         };
@@ -203,8 +283,8 @@ export default function DinoGame() {
           const obsBox = {
             x: obs.left + 5,
             y: obs.type === "bird" ? 40 : 0,
-            width: obs.type === "bird" ? 30 : 40,
-            height: obs.type === "bird" ? 20 : 40,
+            width: obs.type === "bird" ? 30 : 25,
+            height: obs.type === "bird" ? 20 : 35,
           };
 
           const isCollide =
@@ -242,89 +322,171 @@ export default function DinoGame() {
 
     animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameOver, ducking, positionY, speed, jumpTicks]);
+  }, [gameOver, ducking, positionY, speed, isJumping]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
+
+  const fetchLeaderboard = async () => {
+    try {
+      const response = await fetch('/api/leaderboard');
+      const data = await response.json();
+      setLeaderboard(data);
+    } catch (error) {
+      console.error('Failed to fetch leaderboard:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (gameOver && user) {
+      // Update leaderboard when game is over and user is logged in
+      fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          twitchId: user.twitchId,
+          username: user.name,
+          profileImage: user.profileImage,
+          score: score,
+        }),
+      })
+      .then(() => fetchLeaderboard())
+      .catch(error => console.error('Failed to update leaderboard:', error));
+    }
+  }, [gameOver, score, user]);
 
   const dinoImg = ducking
     ? `/girl_duck${frameIndex + 1}.png`
     : `/girl_run${frameIndex + 1}.png`;
 
   return (
-    <div className="w-full h-screen bg-[#f1f1f1] flex items-center justify-center font-mono">
+    <div className="w-full h-screen bg-[#f1f1f1] flex flex-col items-center justify-center font-mono">
       <div className="absolute top-10 flex items-center justify-center text-black font-bold text-5xl">
         <span>DinoCol</span>
         <img src={assetCache.current["/col.gif"]?.src} alt="col" className="w-10 h-10 ml-2" />
       </div>
-
-      <div
-          className="relative bg-white border border-gray-400 overflow-hidden"
-          style={{ width: GAME_WIDTH, height: 200 }}
-          onTouchStart={(e) => {
-            const touch = e.touches[0];
-            if (touch.clientY < window.innerHeight / 2) {
-              handleJump(); // Jump if the touch is in the upper half of the screen
-            } else {
-              handleDuck(true); // Duck if the touch is in the lower half
-            }
-          }}
-          onTouchEnd={() => {
-            handleDuck(false); // Stop ducking when the touch ends
-          }}
-        >
-        <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {score}</div>
-        <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
-
-        <img
-          src={dinoImg}
-          alt="girl"
-          className={`absolute left-12 bottom-0 z-10 ${ducking ? "w-16 h-10" : "w-12 h-12"}`}
-          style={{ transform: `translateY(${positionY}px)` }}
-        />
-
-        {obstacles.map((obs) => {
-          const obsBoxY = obs.type === "bird" ? 60 : 0;
-          return (
-            <React.Fragment key={obs.id}>
-              <img
-                src={
-                  obs.type === "cactus"
-                    ? assetCache.current["/cactus.png"]?.src
-                    : obs.type === "bird"
-                    ? assetCache.current["/bird.webp"]?.src
-                    : assetCache.current["/snack.png"]?.src
-                }
-                alt={obs.type}
-                className={`absolute ${obs.type === "bird" ? "w-10 h-10 bottom-[40px]" : "w-10 h-10 bottom-0"}`}
-                style={{ left: obs.left }}
-              />
-            </React.Fragment>
-          );
-        })}
-
-        {gameOver && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-20">
-            <div className="text-center">
-              <h1 className="text-xl font-bold text-red-600 mb-4">Game Over</h1>
-              <p className="text-lg font-bold text-gray-800 mb-2">
-                Last Score: {score}
-              </p>
-              <p className="text-lg font-bold text-gray-800 mb-4">
-                Highest Score: {highestScore.current}
-              </p>
-              <button
-                onClick={restart}
-                className="bg-blue-500 text-white px-4 py-2 rounded"
-              >
-                Restart
-              </button>
-            </div>
+      <div className="fixed top-4 right-4 z-50">
+        {user ? (
+          <div className="flex items-center gap-2">
+            <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full" />
+            <span>{user.name}</span>
+            <button
+              onClick={handleLogout}
+              className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+            >
+              Logout
+            </button>
           </div>
+        ) : (
+          <button
+            onClick={handleTwitchLogin}
+            className="bg-purple-600 text-white px-4 py-2 rounded"
+          >
+            Login with Twitch
+          </button>
         )}
       </div>
 
-      <div className="absolute bottom-10 text-black font-bold text-center">
-          Design and idea by <a href="https://www.twitch.tv/riii_to" target="_blank" className="text-purple-600 hover:text-purple-800">riii_to</a> & Optimize and Hosting with ❤️ by <a href="https://www.twitch.tv/flukrocker" target="_blank" className="text-purple-600 hover:text-purple-800">FlukRocker</a>
-          <p>Testing by <a href="https://www.twitch.tv/l3lackmegas" target="_blank" className="text-purple-600 hover:text-purple-800">l3lackmegas</a>, <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">Xerenon</a> and <a href="https://www.twitch.tv/crosslos_" target="_blank" className="text-purple-600 hover:text-purple-800">Crosslos_</a></p>
+      <div className="relative">
+        <div className="relative">
+          <div className="absolute top-4 left-4">
+            <div className="text-2xl font-bold">Score: {score}</div>
+            <div className="text-lg">Lives: {lives}</div>
+          </div>
+
+          <div
+            className="w-[800px] h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400"
+            style={{ touchAction: "none" }}
+          >
+            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {score}</div>
+            <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
+
+            <img
+              src={dinoImg}
+              alt="girl"
+              className={`absolute left-12 bottom-0 z-10 ${ducking ? "w-16 h-10" : "w-12 h-12"}`}
+              style={{ transform: `translateY(${positionY}px)` }}
+            />
+
+            {obstacles.map((obs) => {
+              const obsBoxY = obs.type === "bird" ? 60 : 0;
+              return (
+                <React.Fragment key={obs.id}>
+                  <img
+                    src={
+                      obs.type === "cactus"
+                        ? assetCache.current["/cactus.png"]?.src
+                        : obs.type === "bird"
+                        ? assetCache.current["/bird.webp"]?.src
+                        : assetCache.current["/snack.png"]?.src
+                    }
+                    alt={obs.type}
+                    className={`absolute ${obs.type === "bird" ? "w-10 h-10 bottom-[40px]" : "w-10 h-10 bottom-0"}`}
+                    style={{ left: obs.left }}
+                  />
+                </React.Fragment>
+              );
+            })}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-20">
+                <div className="text-center">
+                  <h1 className="text-xl font-bold text-red-600 mb-4">Game Over</h1>
+                  <p className="text-lg font-bold text-gray-800 mb-2">
+                    Last Score: {score}
+                  </p>
+                  <p className="text-lg font-bold text-gray-800 mb-4">
+                    Highest Score: {highestScore.current}
+                  </p>
+                  <button
+                    onClick={restart}
+                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                  >
+                    Restart
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="absolute top-0 -right-80">
+            <Leaderboard data={leaderboard} />
+          </div>
         </div>
+
+        <div className="absolute -bottom-32 left-1/2 transform -translate-x-1/2 flex items-center gap-2 text-black">
+          <button
+            onClick={() => handleVolumeChange(volume - 0.1)}
+            className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center"
+          >
+            -
+          </button>
+          <div className="w-12 text-center">
+            {Math.round(volume * 100)}%
+          </div>
+          <button
+            onClick={() => handleVolumeChange(volume + 0.1)}
+            className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="fixed bottom-4 text-black font-bold text-center">
+        <div>
+          Design and idea by <a href="https://www.twitch.tv/riii_to" target="_blank" className="text-purple-600 hover:text-purple-800">riii_to</a> & Optimize and Hosting with ❤️ by <a href="https://www.twitch.tv/flukrocker" target="_blank" className="text-purple-600 hover:text-purple-800">FlukRocker</a>
+        </div>
+        <div>
+          Develop by <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">XeReNoN</a>, <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">Xerenon</a> and <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">XeReNoN</a>
+        </div>
+        <div>
+          Testing by <a href="https://www.twitch.tv/l3lackmegas" target="_blank" className="text-purple-600 hover:text-purple-800">l3lackmegas</a>, <a href="https://www.twitch.tv/xerenon258" target="_blank" className="text-purple-600 hover:text-purple-800">Xerenon</a> and <a href="https://www.twitch.tv/crosslos_" target="_blank" className="text-purple-600 hover:text-purple-800">Crosslos_</a>
+        </div>
+      </div>
     </div>
   );
 }
