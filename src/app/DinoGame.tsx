@@ -90,7 +90,7 @@ export default function DinoGame() {
     const scope = 'user:read:email';
     
     // Create OAuth URL
-    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_TWITCH_CLIENT}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
     
     // Redirect to Twitch login
     window.location.href = authUrl;
@@ -112,7 +112,7 @@ export default function DinoGame() {
         fetch('https://api.twitch.tv/helix/users', {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Client-Id': process.env.TWITCH_CLIENT || ''
+            'Client-Id': process.env.NEXT_PUBLIC_TWITCH_CLIENT || ''
           }
         })
         .then(res => res.json())
