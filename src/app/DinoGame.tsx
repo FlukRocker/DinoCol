@@ -22,7 +22,7 @@ export default function DinoGame() {
 
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
-  const collidedRef = useRef<Set<number>>(new Set());
+   const collidedRef = useRef<Set<number>>(new Set());
 
   const DINO_LEFT = 48;
   const GAME_WIDTH = 800;
@@ -68,14 +68,34 @@ export default function DinoGame() {
       if (e.code === "Space" || e.code === "ArrowUp") handleJump();
       if (e.code === "ArrowDown") handleDuck(true);
     };
+  
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === "ArrowDown") handleDuck(false);
     };
+  
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch.clientY < window.innerHeight / 2) {
+        handleJump(); // Jump if the touch is in the upper half of the screen
+      } else {
+        handleDuck(true); // Duck if the touch is in the lower half
+      }
+    };
+  
+    const handleTouchEnd = () => {
+      handleDuck(false); // Stop ducking when the touch ends
+    };
+  
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("touchstart", handleTouchStart);
+    window.addEventListener("touchend", handleTouchEnd);
+  
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
     };
   }, [isJumping, gameOver]);
 
@@ -235,7 +255,21 @@ export default function DinoGame() {
         <img src={assetCache.current["/col.gif"]?.src} alt="col" className="w-10 h-10 ml-2" />
       </div>
 
-      <div className="relative bg-white border border-gray-400 overflow-hidden" style={{ width: GAME_WIDTH, height: 200 }}>
+      <div
+          className="relative bg-white border border-gray-400 overflow-hidden"
+          style={{ width: GAME_WIDTH, height: 200 }}
+          onTouchStart={(e) => {
+            const touch = e.touches[0];
+            if (touch.clientY < window.innerHeight / 2) {
+              handleJump(); // Jump if the touch is in the upper half of the screen
+            } else {
+              handleDuck(true); // Duck if the touch is in the lower half
+            }
+          }}
+          onTouchEnd={() => {
+            handleDuck(false); // Stop ducking when the touch ends
+          }}
+        >
         <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {score}</div>
         <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
 
