@@ -30,6 +30,8 @@ export default function DinoGame() {
   const [volume, setVolume] = useState(0.5);
   const [user, setUser] = useState<User | null>(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [showScoreBonus, setShowScoreBonus] = useState(false);
+  const [bonusPosition, setBonusPosition] = useState({ x: 0, y: 0 });
 
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
@@ -102,36 +104,58 @@ export default function DinoGame() {
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('twitchAccessToken');
     // ลบ hash ออกจาก URL
     window.history.replaceState({}, document.title, window.location.pathname);
   };
 
   // Check for OAuth callback
   useEffect(() => {
+    // ตรวจสอบ token ที่มีอยู่ใน localStorage ก่อน
+    const storedToken = localStorage.getItem('twitchAccessToken');
+    if (storedToken) {
+      fetchUserInfo(storedToken);
+      return;
+    }
+
+    // ถ้าไม่มี token ใน localStorage ให้ตรวจสอบจาก URL
     const hash = window.location.hash;
     if (hash) {
       const accessToken = hash.split('&')[0].split('=')[1];
       if (accessToken) {
-        // Get user info from Twitch
-        fetch('https://api.twitch.tv/helix/users', {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Client-Id': process.env.NEXT_PUBLIC_TWITCH_CLIENT || ''
-          }
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.data && data.data[0]) {
-            setUser({
-              name: data.data[0].display_name,
-              profileImage: data.data[0].profile_image_url,
-              twitchId: data.data[0].id
-            });
-          }
-        });
+        // เก็บ token ลง localStorage
+        localStorage.setItem('twitchAccessToken', accessToken);
+        // ลบ hash ออกจาก URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        fetchUserInfo(accessToken);
       }
     }
   }, []);
+
+  // แยกฟังก์ชันการดึงข้อมูลผู้ใช้ออกมา
+  const fetchUserInfo = async (accessToken: string) => {
+    try {
+      const response = await fetch('https://api.twitch.tv/helix/users', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Client-Id': process.env.NEXT_PUBLIC_TWITCH_CLIENT || ''
+        }
+      });
+      const data = await response.json();
+      if (data.data && data.data[0]) {
+        setUser({
+          name: data.data[0].display_name,
+          profileImage: data.data[0].profile_image_url,
+          twitchId: data.data[0].id
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch user info:', error);
+      // ถ้าเกิดข้อผิดพลาด (เช่น token หมดอายุ) ให้ลบ token และ logout
+      localStorage.removeItem('twitchAccessToken');
+      setUser(null);
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -330,6 +354,10 @@ export default function DinoGame() {
           if (obs.type === "snack") {
             new Audio("/eat.mp3").play();
             setScore(s => s + 20);
+            // Show bonus score animation
+            setBonusPosition({ x: obs.left, y: obsBox.y });
+            setShowScoreBonus(true);
+            setTimeout(() => setShowScoreBonus(false), 1000);
             continue;
           } else if (obs.type === "cactus" || obs.type === "bird" || obs.type === "bottle") {
             new Audio("/hit.mp3").play();
@@ -439,7 +467,12 @@ export default function DinoGame() {
       <div className="relative w-full max-w-[800px] px-4">
         <div className="relative">
           <div className="absolute top-4 left-4">
-            <div className="text-2xl font-bold">Score: {formatNumber(score)}</div>
+            <div className="text-2xl font-bold flex items-center gap-2">
+              Score: {formatNumber(score)}
+              {showScoreBonus && (
+                <span className="text-green-500 animate-bounce">+20</span>
+              )}
+            </div>
             <div className="text-lg">Lives: {lives}</div>
           </div>
 
@@ -447,7 +480,12 @@ export default function DinoGame() {
             className="w-full h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400"
             style={{ touchAction: "none" }}
           >
-            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {formatNumber(score)}</div>
+            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10 flex items-center gap-2">
+              คะแนน: {formatNumber(score)}
+              {showScoreBonus && (
+                <span className="text-green-500 animate-bounce">+20</span>
+              )}
+            </div>
             <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
 
             <img
