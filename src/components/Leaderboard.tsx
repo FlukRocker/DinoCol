@@ -21,11 +21,11 @@ export default function Leaderboard({ data }: LeaderboardProps) {
   const getRankEmoji = (index: number) => {
     switch (index) {
       case 0:
-        return '⭐'; // First place
+        return '🏆'; // Gold trophy
       case 1:
-        return '❄️'; // Second place
+        return '🥈'; // Silver medal
       case 2:
-        return '⭐'; // Third place
+        return '🥉'; // Bronze medal
       default:
         return '';
     }
