@@ -26,7 +26,7 @@ export default function DinoGame() {
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(1);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(6);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
   const [volume, setVolume] = useState(0.5);
   const [user, setUser] = useState<User | null>(null);
@@ -34,6 +34,7 @@ export default function DinoGame() {
   const [showScoreBonus, setShowScoreBonus] = useState(false);
   const [bonusPosition, setBonusPosition] = useState({ x: 0, y: 0 });
   const [isPaused, setIsPaused] = useState(false);
+  const [canJump, setCanJump] = useState(true);
 
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
@@ -46,21 +47,27 @@ export default function DinoGame() {
   const MAX_JUMP_HEIGHT = 86;
   const TARGET_FPS = 60;
   const FRAME_INTERVAL = 1000 / TARGET_FPS;
+  const BASE_SPEED = 6;
+  const SPEED_INCREASE_INTERVAL = 100;
+  const SPEED_INCREASE_AMOUNT = 0.2;
+  const MAX_SPEED = 12;
 
   const jumpSound = useRef<HTMLAudioElement | null>(null);
   const assetCache = useRef<{ [key: string]: HTMLImageElement }>({});
   const lastFrameTime = useRef(0);
 
   const handleJump = () => {
-    if (!isJumping && !ducking && !gameOver) {
+    if (!isJumping && !gameOver && canJump) {
       jumpSound.current?.play();
       setIsJumping(true);
       setVelocity(INITIAL_JUMP_VELOCITY);
+      setJumpTicks(1);
+      setCanJump(false);
     }
   };
 
   const handleDuck = (isDucking: boolean) => {
-    if (!gameOver && !isJumping) {
+    if (!gameOver) {
       setDucking(isDucking);
     }
   };
@@ -73,7 +80,7 @@ export default function DinoGame() {
     }
     setScore(0);
     setLives(1);
-    setSpeed(1);
+    setSpeed(BASE_SPEED);
     setObstacles([]);
     setVelocity(0);
     setPositionY(0);
@@ -161,39 +168,47 @@ export default function DinoGame() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.code === "ArrowUp") handleJump();
-      if (e.code === "ArrowDown") handleDuck(true);
-    };
-  
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "ArrowDown") handleDuck(false);
-    };
-  
-    const handleTouchStart = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      if (touch.clientY < window.innerHeight / 2) {
-        handleJump(); // Jump if the touch is in the upper half of the screen
-      } else {
-        handleDuck(true); // Duck if the touch is in the lower half
+      if (e.repeat) return;
+      
+      if ((e.code === "Space" || e.code === "ArrowUp") && !isJumping && !gameOver && canJump) {
+        handleJump();
+      }
+      if (e.code === "ArrowDown" && !gameOver) {
+        handleDuck(true);
       }
     };
-  
-    const handleTouchEnd = () => {
-      handleDuck(false); // Stop ducking when the touch ends
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "ArrowDown") {
+        handleDuck(false);
+      }
     };
-  
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch.clientY < window.innerHeight / 2 && !isJumping && !gameOver && canJump) {
+        handleJump();
+      } else if (!gameOver) {
+        handleDuck(true);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      handleDuck(false);
+    };
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("touchstart", handleTouchStart);
     window.addEventListener("touchend", handleTouchEnd);
-  
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isJumping, gameOver]);
+  }, [isJumping, gameOver, canJump]);
 
   useEffect(() => {
     jumpSound.current = new Audio("/jump.mp3");
@@ -258,7 +273,11 @@ export default function DinoGame() {
     const interval = setInterval(() => {
       if (!gameOver && !isPaused) {
         setScore(s => s + 1);
-        setSpeed(s => Math.min(6 + Math.floor(score / 100) * 0.5, 10));
+        setSpeed(currentSpeed => {
+          const speedIncrease = Math.floor(score / SPEED_INCREASE_INTERVAL) * SPEED_INCREASE_AMOUNT;
+          const newSpeed = BASE_SPEED + speedIncrease;
+          return Math.min(newSpeed, MAX_SPEED);
+        });
       }
     }, 100);
     return () => clearInterval(interval);
@@ -318,6 +337,7 @@ export default function DinoGame() {
       let newVelocity = v;
       if (isJumping) {
         newVelocity += GRAVITY;
+        setJumpTicks(prev => prev + 1);
       }
       return newVelocity;
     });
@@ -328,6 +348,8 @@ export default function DinoGame() {
       if (newY >= 0) {
         setIsJumping(false);
         setVelocity(0);
+        setJumpTicks(0);
+        setCanJump(true);
         return 0;
       }
       
