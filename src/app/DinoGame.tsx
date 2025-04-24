@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import Leaderboard from '@/components/Leaderboard';
+import { CompactEncrypt, generateSecret } from "jose";
 
 interface Obstacle {
   id: number;
@@ -409,23 +410,42 @@ export default function DinoGame() {
   };
 
   useEffect(() => {
-    if (gameOver && user) {
-      // Update leaderboard when game is over and user is logged in
-      fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          twitchId: user.twitchId,
-          username: user.name,
-          profileImage: user.profileImage,
-          score: score,
-        }),
-      })
-      .then(() => fetchLeaderboard())
-      .catch(error => console.error('Failed to update leaderboard:', error));
-    }
+    const sendScoreToLeaderboard = async () => {
+      if (gameOver && user) {
+        try {
+          // Generate a secret key (use a shared secret in production)
+          const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_JWE_SECRET);
+  
+          // Encrypt the payload
+          const payload = {
+            twitchId: user.twitchId,
+            username: user.name,
+            profileImage: user.profileImage,
+            score: score,
+          };
+  
+          const jwe = await new CompactEncrypt(new TextEncoder().encode(JSON.stringify(payload)))
+            .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+            .encrypt(secret);
+  
+          // Send the JWE token to the leaderboard API
+          await fetch("/api/leaderboard", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ token: jwe }),
+          });
+  
+          // Fetch the updated leaderboard
+          fetchLeaderboard();
+        } catch (error) {
+          console.error("Failed to send score to leaderboard:", error);
+        }
+      }
+    };
+  
+    sendScoreToLeaderboard();
   }, [gameOver, score, user]);
 
   const dinoImg = ducking
