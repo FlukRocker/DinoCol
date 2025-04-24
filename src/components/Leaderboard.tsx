@@ -13,6 +13,7 @@ interface LeaderboardProps {
 export default function Leaderboard({ data }: LeaderboardProps) {
   const top5 = data.slice(0, 5);
   const lastPlace = data.length > 0 ? data[data.length - 1] : null;
+  const lastPlacePosition = data.length;
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US').format(num);
@@ -68,7 +69,7 @@ export default function Leaderboard({ data }: LeaderboardProps) {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="font-bold text-lg min-w-[25px]">
-                  💩{data.length}.
+                  💩{lastPlacePosition}.
                 </span>
                 <img 
                   src={lastPlace.profile_image} 

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import Leaderboard from '@/components/Leaderboard';
-import { CompactEncrypt, generateSecret } from "jose";
+import { CompactEncrypt, generateSecret, CompactSign } from "jose";
 
 interface Obstacle {
   id: number;
@@ -203,7 +203,6 @@ export default function DinoGame() {
       "/girl_run1.png", "/girl_run2.png", "/girl_run3.png",
       "/girl_duck1.png", "/girl_duck2.png",
       "/cactus.png", "/bird.webp", "/snack.png", "/col.gif",
-      "/bottle.png" // Add bottle image
     ];
     assets.forEach(src => {
       const img = new Image();
@@ -410,42 +409,59 @@ export default function DinoGame() {
   };
 
   useEffect(() => {
-    const sendScoreToLeaderboard = async () => {
-      if (gameOver && user) {
+    if (gameOver && user) {
+      const encryptData = async () => {
         try {
-          // Generate a secret key (use a shared secret in production)
-          const secret = new TextEncoder().encode(process.env.NEXT_PUBLIC_JWE_SECRET);
-  
-          // Encrypt the payload
+          if (!process.env.NEXT_PUBLIC_JWE_SECRET) {
+            console.error('NEXT_PUBLIC_JWE_SECRET is not set');
+            return;
+          }
+
+          // Create a 256-bit (32 bytes) key using the first 32 bytes of the secret
+          const secretBuffer = new TextEncoder().encode(process.env.NEXT_PUBLIC_JWE_SECRET);
+          const key = secretBuffer.slice(0, 32);
+
           const payload = {
             twitchId: user.twitchId,
             username: user.name,
             profileImage: user.profileImage,
-            score: score,
+            score: score
           };
-  
-          const jwe = await new CompactEncrypt(new TextEncoder().encode(JSON.stringify(payload)))
-            .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
-            .encrypt(secret);
-  
-          // Send the JWE token to the leaderboard API
-          await fetch("/api/leaderboard", {
-            method: "POST",
+
+
+          const jwe = await new CompactEncrypt(
+            new TextEncoder().encode(JSON.stringify(payload))
+          )
+            .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+            .encrypt(key);
+
+
+          // Send encrypted data to API
+          const response = await fetch('/api/leaderboard', {
+            method: 'POST',
             headers: {
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
             },
             body: JSON.stringify({ token: jwe }),
           });
-  
-          // Fetch the updated leaderboard
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error('API Error:', data);
+            throw new Error(data.error || 'Failed to update leaderboard');
+          }
+
+          console.log('Leaderboard updated successfully');
+          // Fetch updated leaderboard
           fetchLeaderboard();
         } catch (error) {
-          console.error("Failed to send score to leaderboard:", error);
+          console.error('Failed to update leaderboard:', error);
         }
-      }
-    };
-  
-    sendScoreToLeaderboard();
+      };
+
+      encryptData();
+    }
   }, [gameOver, score, user]);
 
   const dinoImg = ducking

@@ -5,24 +5,10 @@ import { getLeaderboard, updateHighScore, pool } from '@/lib/db';
 export async function GET() {
   const client = await pool.connect();
   try {
-    // Ensure table exists first
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS leaderboard (
-        id SERIAL PRIMARY KEY,
-        twitch_id VARCHAR(255) NOT NULL UNIQUE,
-        username VARCHAR(255) NOT NULL,
-        profile_image VARCHAR(255) NOT NULL,
-        high_score INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
     const result = await client.query(`
       SELECT username, profile_image, high_score
       FROM leaderboard
       ORDER BY high_score DESC
-      LIMIT 10
     `);
     return NextResponse.json(result.rows);
   } catch (error) {
@@ -39,24 +25,61 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { token } = await request.json();
+    
+    if (!token) {
+      console.error('No token provided');
+      return NextResponse.json(
+        { error: 'No token provided' },
+        { status: 400 }
+      );
+    }
 
-    // Use the same shared secret for decryption
-    const secret = new TextEncoder().encode(process.env.JWE_SECRET);
+    if (!process.env.NEXT_PUBLIC_JWE_SECRET) {
+      console.error('NEXT_PUBLIC_JWE_SECRET is not set');
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
 
-    // Decrypt the JWE token
-    const { plaintext } = await compactDecrypt(new TextEncoder().encode(token), secret);
-    const payload = JSON.parse(new TextDecoder().decode(plaintext));
+    // Create a 256-bit key using the first 32 bytes of the secret
+    const secretBuffer = new TextEncoder().encode(process.env.NEXT_PUBLIC_JWE_SECRET);
+    const key = secretBuffer.slice(0, 32);
+    
+    try {
+      const { plaintext } = await compactDecrypt(token, key);
+      const payload = JSON.parse(new TextDecoder().decode(plaintext));
+      console.log('Decrypted payload:', payload);
 
-    const { twitchId, username, profileImage, score } = payload;
+      const { twitchId, username, profileImage, score } = payload;
 
-    // Update the leaderboard
-    await updateHighScore(twitchId, username, profileImage, score);
+      if (!twitchId || !username || !profileImage || typeof score !== 'number') {
+        console.error('Invalid payload data:', payload);
+        return NextResponse.json(
+          { error: 'Invalid payload data' },
+          { status: 400 }
+        );
+      }
 
-    // Return the updated leaderboard
-    const updatedLeaderboard = await getLeaderboard(5);
-    return NextResponse.json(updatedLeaderboard);
+      // Update the leaderboard
+      await updateHighScore(twitchId, username, profileImage, score);
+      console.log('Score updated successfully');
+
+      // Get and return updated leaderboard
+      const updatedLeaderboard = await getLeaderboard();
+      return NextResponse.json(updatedLeaderboard);
+    } catch (decryptError) {
+      console.error('Failed to decrypt token:', decryptError);
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 400 }
+      );
+    }
   } catch (error) {
-    console.error("Failed to update score:", error);
-    return NextResponse.json({ error: "Failed to update score" }, { status: 500 });
+    console.error('Failed to update leaderboard:', error);
+    return NextResponse.json(
+      { error: 'Failed to update leaderboard' },
+      { status: 500 }
+    );
   }
 }
