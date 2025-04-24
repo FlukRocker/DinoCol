@@ -1,3 +1,4 @@
+import { compactDecrypt } from "jose";
 import { NextResponse } from 'next/server';
 import { getLeaderboard, updateHighScore, pool } from '@/lib/db';
 
@@ -37,12 +38,25 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { twitchId, username, profileImage, score } = await request.json();
+    const { token } = await request.json();
+
+    // Use the same shared secret for decryption
+    const secret = new TextEncoder().encode(process.env.JWE_SECRET);
+
+    // Decrypt the JWE token
+    const { plaintext } = await compactDecrypt(new TextEncoder().encode(token), secret);
+    const payload = JSON.parse(new TextDecoder().decode(plaintext));
+
+    const { twitchId, username, profileImage, score } = payload;
+
+    // Update the leaderboard
     await updateHighScore(twitchId, username, profileImage, score);
+
+    // Return the updated leaderboard
     const updatedLeaderboard = await getLeaderboard(5);
     return NextResponse.json(updatedLeaderboard);
   } catch (error) {
-    console.error('Failed to update score:', error);
-    return NextResponse.json({ error: 'Failed to update score' }, { status: 500 });
+    console.error("Failed to update score:", error);
+    return NextResponse.json({ error: "Failed to update score" }, { status: 500 });
   }
-} 
+}
