@@ -39,6 +39,7 @@ export default function DinoGame() {
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
   const collidedRef = useRef<Set<number>>(new Set());
+  const currentScoreRef = useRef(0);
 
   const DINO_LEFT = 48;
   const GAME_WIDTH = 800;
@@ -50,7 +51,7 @@ export default function DinoGame() {
   const BASE_SPEED = 6;
   const SPEED_INCREASE_INTERVAL = 100;
   const SPEED_INCREASE_AMOUNT = 0.2;
-  const MAX_SPEED = 12;
+  const MAX_SPEED = 25;
 
   const jumpSound = useRef<HTMLAudioElement | null>(null);
   const assetCache = useRef<{ [key: string]: HTMLImageElement }>({});
@@ -272,7 +273,11 @@ export default function DinoGame() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!gameOver && !isPaused) {
-        setScore(s => s + 1);
+        setScore(s => {
+          const newScore = s + 1;
+          currentScoreRef.current = newScore;
+          return newScore;
+        });
         setSpeed(currentSpeed => {
           const speedIncrease = Math.floor(score / SPEED_INCREASE_INTERVAL) * SPEED_INCREASE_AMOUNT;
           const newSpeed = BASE_SPEED + speedIncrease;
@@ -294,11 +299,21 @@ export default function DinoGame() {
           const cactusRand = Math.random();
           let cactusCount = 1;
           
-          if (cactusRand < 0.2) { // 20% chance for 3 cacti
-            cactusCount = 3;
-          } else if (cactusRand < 0.6) { // 40% chance for 2 cacti
-            cactusCount = 2;
-          } // 40% chance for 1 cactus
+          if (currentScoreRef.current > 2000) {
+            if (cactusRand < 0.2) { // 20% chance for 4 cacti
+              cactusCount = 4;
+            } else if (cactusRand < 0.5) { // 30% chance for 3 cacti
+              cactusCount = 3;
+            } else if (cactusRand < 0.8) { // 30% chance for 2 cacti
+              cactusCount = 2;
+            } // 20% chance for 1 cactus
+          } else {
+            if (cactusRand < 0.2) { // 20% chance for 3 cacti
+              cactusCount = 3;
+            } else if (cactusRand < 0.6) { // 40% chance for 2 cacti
+              cactusCount = 2;
+            } // 40% chance for 1 cactus
+          }
           
           for (let i = 0; i < cactusCount; i++) {
             obstaclesToAdd.push({
@@ -513,12 +528,12 @@ export default function DinoGame() {
   };
 
   return (
-    <div className="w-full h-screen bg-[#f1f1f1] flex flex-col items-center justify-center font-mono">
-      <div className="absolute top-10 flex items-center justify-center text-black font-bold text-5xl">
+    <div className="w-full h-screen bg-[#f1f1f1] flex flex-col items-center justify-center font-mono select-none">
+      <div className="absolute top-10 flex items-center justify-center text-black font-bold text-5xl select-none">
         <span>DinoCol</span>
         <img src={assetCache.current["/col.gif"]?.src} alt="col" className="w-10 h-10 ml-2" />
       </div>
-      <div className="fixed top-4 right-4 z-50">
+      <div className="fixed top-4 right-4 z-50 select-none">
         {user ? (
           <div className="flex items-center gap-2">
             <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full" />
@@ -543,26 +558,26 @@ export default function DinoGame() {
       <div className="relative w-full max-w-[800px] px-4">
         <div className="relative">
           <div className="absolute top-4 left-4">
-            <div className="text-2xl font-bold flex items-center gap-2">
+            <div className="text-2xl font-bold flex items-center gap-2 select-none">
               Score: {formatNumber(score)}
               {showScoreBonus && (
                 <span className="text-green-500 animate-bounce">+20</span>
               )}
             </div>
-            <div className="text-lg">Lives: {lives}</div>
+            <div className="text-lg select-none">Lives: {lives}</div>
           </div>
 
           <div
-            className="w-full h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400"
+            className="w-full h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400 select-none"
             style={{ touchAction: "none" }}
           >
-            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10 flex items-center gap-2">
+            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10 flex items-center gap-2 select-none">
               คะแนน: {formatNumber(score)}
               {showScoreBonus && (
                 <span className="text-green-500 animate-bounce">+20</span>
               )}
             </div>
-            <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
+            <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10 select-none">♥ {lives}</div>
 
             <img
               src={dinoImg}
