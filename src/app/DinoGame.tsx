@@ -4,8 +4,9 @@ import Leaderboard from '@/components/Leaderboard';
 
 interface Obstacle {
   id: number;
-  type: "cactus" | "bird" | "snack";
+  type: "cactus" | "bird" | "snack" | "bottle";
   left: number;
+  height?: number; // For bottles to have different heights
 }
 
 interface User {
@@ -39,9 +40,12 @@ export default function DinoGame() {
   const GRAVITY = 0.25;
   const INITIAL_JUMP_VELOCITY = -11.5;
   const MAX_JUMP_HEIGHT = 86;
+  const TARGET_FPS = 60;
+  const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
   const jumpSound = useRef<HTMLAudioElement | null>(null);
   const assetCache = useRef<{ [key: string]: HTMLImageElement }>({});
+  const lastFrameTime = useRef(0);
 
   const handleJump = () => {
     if (!isJumping && !ducking && !gameOver) {
@@ -173,7 +177,8 @@ export default function DinoGame() {
     const assets = [
       "/girl_run1.png", "/girl_run2.png", "/girl_run3.png",
       "/girl_duck1.png", "/girl_duck2.png",
-      "/cactus.png", "/bird.webp", "/snack.png", "/col.gif"
+      "/cactus.png", "/bird.webp", "/snack.png", "/col.gif",
+      "/bottle.png" // Add bottle image
     ];
     assets.forEach(src => {
       const img = new Image();
@@ -223,16 +228,126 @@ export default function DinoGame() {
     const interval = setInterval(() => {
       if (!gameOver) {
         const rand = Math.random();
-        const type = rand < 0.7 ? "cactus" : rand < 0.85 ? "bird" : "snack";
-        setObstacles(prev => [...prev, {
-          id: Date.now(),
-          type,
-          left: GAME_WIDTH
-        }]);
+        let obstaclesToAdd: Obstacle[] = [];
+        
+        // Random chance to spawn multiple cacti
+        if (rand < 0.3) { // 30% chance to spawn multiple cacti
+          const cactusRand = Math.random();
+          let cactusCount = 1;
+          
+          if (cactusRand < 0.2) { // 20% chance for 3 cacti
+            cactusCount = 3;
+          } else if (cactusRand < 0.6) { // 40% chance for 2 cacti
+            cactusCount = 2;
+          } // 40% chance for 1 cactus
+          
+          for (let i = 0; i < cactusCount; i++) {
+            obstaclesToAdd.push({
+              id: Date.now() + i,
+              type: "cactus",
+              left: GAME_WIDTH + (i * 30), // Space cacti 30px apart
+            });
+          }
+        } else {
+          // Regular obstacles
+          const type = rand < 0.7 ? "cactus" : rand < 0.85 ? "bird" : "snack";
+          obstaclesToAdd.push({
+            id: Date.now(),
+            type,
+            left: GAME_WIDTH
+          });
+        }
+        
+        setObstacles(prev => [...prev, ...obstaclesToAdd]);
       }
     }, 1000);
     return () => clearInterval(interval);
   }, [gameOver]);
+
+  const updateGameState = () => {
+    const currentTime = performance.now();
+    const elapsed = currentTime - lastFrameTime.current;
+
+    if (elapsed < FRAME_INTERVAL) {
+      return;
+    }
+
+    lastFrameTime.current = currentTime - (elapsed % FRAME_INTERVAL);
+
+    setVelocity(v => {
+      let newVelocity = v;
+      if (isJumping) {
+        newVelocity += GRAVITY;
+      }
+      return newVelocity;
+    });
+
+    setPositionY(y => {
+      const newY = y + velocity;
+      
+      if (newY >= 0) {
+        setIsJumping(false);
+        setVelocity(0);
+        return 0;
+      }
+      
+      if (newY <= -MAX_JUMP_HEIGHT) {
+        setVelocity(GRAVITY);
+        return -MAX_JUMP_HEIGHT;
+      }
+      
+      return newY;
+    });
+
+    setObstacles(prev => {
+      const next = prev.map(o => ({ ...o, left: o.left - speed }));
+      const filtered: Obstacle[] = [];
+
+      const dinoBox = {
+        x: DINO_LEFT,
+        y: -positionY,
+        width: ducking ? 64 : 48,
+        height: ducking ? 40 : 48,
+      };
+
+      for (const obs of next) {
+        const obsBox = {
+          x: obs.left + 5,
+          y: obs.type === "bird" ? 40 : obs.type === "bottle" ? 0 : 0,
+          width: obs.type === "bird" ? 30 : obs.type === "bottle" ? 20 : 25,
+          height: obs.type === "bird" ? 20 : obs.type === "bottle" ? (obs.height || 40) : 35,
+        };
+
+        const isCollide =
+          dinoBox.x < obsBox.x + obsBox.width &&
+          dinoBox.x + dinoBox.width > obsBox.x &&
+          dinoBox.y < obsBox.y + obsBox.height &&
+          dinoBox.y + dinoBox.height > obsBox.y;
+
+        if (isCollide && !collidedRef.current.has(obs.id)) {
+          collidedRef.current.add(obs.id);
+
+          if (obs.type === "snack") {
+            new Audio("/eat.mp3").play();
+            setScore(s => s + 20);
+            continue;
+          } else if (obs.type === "cactus" || obs.type === "bird" || obs.type === "bottle") {
+            new Audio("/hit.mp3").play();
+            setLives(l => {
+              const next = l - 1;
+              if (next <= 0) setGameOver(true);
+              return next;
+            });
+            continue;
+          }
+        }
+
+        if (obs.left > -50) filtered.push(obs);
+      }
+
+      return filtered;
+    });
+  };
 
   useEffect(() => {
     let animationFrameId: number;
@@ -242,79 +357,7 @@ export default function DinoGame() {
       const deltaTime = time - lastTime;
       lastTime = time;
 
-      setVelocity(v => {
-        let newVelocity = v;
-        if (isJumping) {
-          newVelocity += GRAVITY;
-        }
-        return newVelocity;
-      });
-
-      setPositionY(y => {
-        const newY = y + velocity;
-        
-        if (newY >= 0) {
-          setIsJumping(false);
-          setVelocity(0);
-          return 0;
-        }
-        
-        if (newY <= -MAX_JUMP_HEIGHT) {
-          setVelocity(GRAVITY);
-          return -MAX_JUMP_HEIGHT;
-        }
-        
-        return newY;
-      });
-
-      setObstacles(prev => {
-        const next = prev.map(o => ({ ...o, left: o.left - speed }));
-        const filtered: Obstacle[] = [];
-
-        const dinoBox = {
-          x: DINO_LEFT,
-          y: -positionY,
-          width: ducking ? 64 : 48,
-          height: ducking ? 40 : 48,
-        };
-
-        for (const obs of next) {
-          const obsBox = {
-            x: obs.left + 5,
-            y: obs.type === "bird" ? 40 : 0,
-            width: obs.type === "bird" ? 30 : 25,
-            height: obs.type === "bird" ? 20 : 35,
-          };
-
-          const isCollide =
-            dinoBox.x < obsBox.x + obsBox.width &&
-            dinoBox.x + dinoBox.width > obsBox.x &&
-            dinoBox.y < obsBox.y + obsBox.height &&
-            dinoBox.y + dinoBox.height > obsBox.y;
-
-          if (isCollide && !collidedRef.current.has(obs.id)) {
-            collidedRef.current.add(obs.id);
-
-            if (obs.type === "snack") {
-              new Audio("/eat.mp3").play();
-              setScore(s => s + 20);
-              continue;
-            } else if (obs.type === "cactus" || obs.type === "bird") {
-              new Audio("/hit.mp3").play();
-              setLives(l => {
-                const next = l - 1;
-                if (next <= 0) setGameOver(true);
-                return next;
-              });
-              continue;
-            }
-          }
-
-          if (obs.left > -50) filtered.push(obs);
-        }
-
-        return filtered;
-      });
+      updateGameState();
 
       if (!gameOver) animationFrameId = requestAnimationFrame(gameLoop);
     };
@@ -361,6 +404,10 @@ export default function DinoGame() {
     ? `/girl_duck${frameIndex + 1}.png`
     : `/girl_run${frameIndex + 1}.png`;
 
+  const formatNumber = (num: number) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
   return (
     <div className="w-full h-screen bg-[#f1f1f1] flex flex-col items-center justify-center font-mono">
       <div className="absolute top-10 flex items-center justify-center text-black font-bold text-5xl">
@@ -389,18 +436,18 @@ export default function DinoGame() {
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative w-full max-w-[800px] px-4">
         <div className="relative">
           <div className="absolute top-4 left-4">
-            <div className="text-2xl font-bold">Score: {score}</div>
+            <div className="text-2xl font-bold">Score: {formatNumber(score)}</div>
             <div className="text-lg">Lives: {lives}</div>
           </div>
 
           <div
-            className="w-[800px] h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400"
+            className="w-full h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400"
             style={{ touchAction: "none" }}
           >
-            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {score}</div>
+            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10">คะแนน: {formatNumber(score)}</div>
             <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10">♥ {lives}</div>
 
             <img
@@ -435,10 +482,10 @@ export default function DinoGame() {
                 <div className="text-center">
                   <h1 className="text-xl font-bold text-red-600 mb-4">Game Over</h1>
                   <p className="text-lg font-bold text-gray-800 mb-2">
-                    Last Score: {score}
+                    Last Score: {formatNumber(score)}
                   </p>
                   <p className="text-lg font-bold text-gray-800 mb-4">
-                    Highest Score: {highestScore.current}
+                    Highest Score: {formatNumber(highestScore.current)}
                   </p>
                   <button
                     onClick={restart}
@@ -451,7 +498,18 @@ export default function DinoGame() {
             )}
           </div>
 
-          <div className="absolute top-0 -right-80">
+          {/* Desktop Leaderboard */}
+          <div className="absolute top-0 -right-80 xl:block hidden">
+            <Leaderboard data={leaderboard} />
+          </div>
+
+          {/* Tablet Leaderboard */}
+          <div className="xl:hidden md:block hidden absolute top-0 -right-60">
+            <Leaderboard data={leaderboard} />
+          </div>
+
+          {/* Mobile Leaderboard */}
+          <div className="md:hidden block mt-4 w-full max-w-[300px] mx-auto">
             <Leaderboard data={leaderboard} />
           </div>
         </div>
@@ -460,17 +518,47 @@ export default function DinoGame() {
           <button
             onClick={() => handleVolumeChange(volume - 0.1)}
             className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center"
+            title="Decrease Volume"
           >
-            -
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 5L6 9H2v6h4l5 4V5zM15 12h4"
+              />
+            </svg>
           </button>
-          <div className="w-12 text-center">
-            {Math.round(volume * 100)}%
+          <div className="flex items-center gap-2">
+            <div className="w-12 text-center">
+              {Math.round(volume * 100)}%
+            </div>
           </div>
           <button
             onClick={() => handleVolumeChange(volume + 0.1)}
             className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center"
+            title="Increase Volume"
           >
-            +
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 5L6 9H2v6h4l5 4V5zM15 12h4m-2-2v4"
+              />
+            </svg>
           </button>
         </div>
       </div>
