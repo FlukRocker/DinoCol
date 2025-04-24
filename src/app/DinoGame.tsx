@@ -33,6 +33,7 @@ export default function DinoGame() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [showScoreBonus, setShowScoreBonus] = useState(false);
   const [bonusPosition, setBonusPosition] = useState({ x: 0, y: 0 });
+  const [isPaused, setIsPaused] = useState(false);
 
   const highestScore = useRef(0);
   const [lastScore, setLastScore] = useState(0);
@@ -239,14 +240,29 @@ export default function DinoGame() {
   }, []);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !gameOver) {
+        setIsPaused(true);
+      } else {
+        setIsPaused(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [gameOver]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
-      if (!gameOver) {
+      if (!gameOver && !isPaused) {
         setScore(s => s + 1);
         setSpeed(s => Math.min(6 + Math.floor(score / 100) * 0.5, 10));
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [gameOver]);
+  }, [gameOver, isPaused, score]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -292,7 +308,7 @@ export default function DinoGame() {
     const currentTime = performance.now();
     const elapsed = currentTime - lastFrameTime.current;
 
-    if (elapsed < FRAME_INTERVAL) {
+    if (elapsed < FRAME_INTERVAL || isPaused) {
       return;
     }
 
@@ -385,14 +401,16 @@ export default function DinoGame() {
       const deltaTime = time - lastTime;
       lastTime = time;
 
-      updateGameState();
+      if (!gameOver && !isPaused) {
+        updateGameState();
+      }
 
       if (!gameOver) animationFrameId = requestAnimationFrame(gameLoop);
     };
 
     animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameOver, ducking, positionY, speed, isJumping]);
+  }, [gameOver, isPaused, ducking, positionY, speed, isJumping]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -550,6 +568,14 @@ export default function DinoGame() {
                 </React.Fragment>
               );
             })}
+
+            {isPaused && !gameOver && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-20">
+                <div className="text-white text-2xl font-bold">
+                  Game Paused
+                </div>
+              </div>
+            )}
 
             {gameOver && (
               <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-20">
