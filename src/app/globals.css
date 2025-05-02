@@ -21,6 +21,14 @@
 }
 
 
+@keyframes cityScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-800px); } 
+}
+
+.animate-cityScroll {
+  animation: cityScroll 6s linear infinite;
+}
 
 body {
   background: var(--background);

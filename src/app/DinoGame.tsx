@@ -528,12 +528,12 @@ export default function DinoGame() {
   };
 
   return (
-    <div className="w-full h-screen bg-[#f1f1f1] flex flex-col items-center justify-center font-mono select-none">
+    <div className="w-full h-screen bg-gradient-to-b from-blue-100 to-pink-100 flex flex-col items-center justify-center font-mono select-none">
       <div className="absolute top-10 flex items-center justify-center text-black font-bold text-5xl select-none">
         <span>DinoCol</span>
         <img src={assetCache.current["/col.gif"]?.src} alt="col" className="w-10 h-10 ml-2" />
       </div>
-      <div className="fixed top-4 right-4 z-50 select-none">
+      <div className="fixed top-4 right-4 z-50 select-none ">
         {user ? (
           <div className="flex items-center gap-2">
             <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full" />
@@ -555,9 +555,10 @@ export default function DinoGame() {
         )}
       </div>
 
-      <div className="relative w-full max-w-[800px] px-4">
-        <div className="relative">
-          <div className="absolute top-4 left-4">
+      <div className="relative w-full max-w-[800px] px-4 " >
+        <div className="relative  shadow-xl rounded ">
+    
+          <div className="absolute top-4 left-4 ">
             <div className="text-2xl font-bold flex items-center gap-2 select-none">
               Score: {formatNumber(score)}
               {showScoreBonus && (
@@ -567,17 +568,23 @@ export default function DinoGame() {
             <div className="text-lg select-none">Lives: {lives}</div>
           </div>
 
-          <div
-            className="w-full h-[200px] bg-white relative overflow-hidden border-b-2 border-gray-400 select-none"
-            style={{ touchAction: "none" }}
-          >
-            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10 flex items-center gap-2 select-none">
+          <div className="w-full h-[200px] relative overflow-hidden border-b-2 border-gray-400 select-none bg-white">
+            <div className="absolute w-[2400px] h-full flex animate-cityScroll">
+              <img src="/city.png" alt="city" className="w-[800px] h-full object-cover" />
+              <img src="/city.png" alt="city" className="w-[800px] h-full object-cover" />
+              <img src="/city.png" alt="city" className="w-[800px] h-full object-cover" />
+            </div>
+            <div className="absolute top-2 left-4 text-sm font-bold text-gray-800 z-10 bg-white/80 px-2 py-1 rounded shadow">
               คะแนน: {formatNumber(score)}
               {showScoreBonus && (
                 <span className="text-green-500 animate-bounce">+20</span>
               )}
             </div>
-            <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10 select-none">♥ {lives}</div>
+
+
+
+        <div className="absolute top-2 right-4 text-sm font-bold text-red-500 z-10 bg-white/80 px-2 py-1 rounded shadow">♥ {lives}</div>
+          
 
             <img
               src={dinoImg}
@@ -615,7 +622,7 @@ export default function DinoGame() {
             )}
 
             {gameOver && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-20">
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-10 z-20">
                 <div className="text-center">
                   <h1 className="text-xl font-bold text-red-600 mb-4">Game Over</h1>
                   <p className="text-lg font-bold text-gray-800 mb-2">
